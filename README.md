@@ -1,16 +1,66 @@
-# React + Vite
+# Mapify
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Turn any block of text into a clean, minimal mind map — instantly.
 
-Currently, two official plugins are available:
+## Why this exists
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+This started after watching a video by Ali Abdaal on spider maps as a study
+technique — the idea that looking at everything you've learned on a topic
+laid out at a high level, as a web of connected ideas, mirrors how your mind
+actually works. Your brain doesn't store facts in a list; it links concepts
+together. A spider map just puts that on paper.
 
-## React Compiler
+Mapify is a small tool to do that instantly: paste in whatever you're
+studying, and get a clean visual map of the core ideas and how they connect
+— minimal and fast enough that you'd actually use it, and simple enough to
+screenshot straight into your notes.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Features
 
-## Expanding the Oxlint configuration
+- Paste any text, get an instant visual mind map of its core concepts
+- Central topic + key related ideas extracted automatically (Google Gemini)
+- Minimal, editorial-style design — soft shadows, premium typography, no clutter
+- Drag, pan, zoom, and manually connect nodes on the canvas
+- Smooth transition between the input screen and the generated map
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+## Tech stack
+
+- **React + Vite** — app framework and dev tooling
+- **Tailwind CSS v4** — styling
+- **React Flow (`@xyflow/react`)** — the interactive node/edge canvas
+- **Motion** — screen transition animation
+- **Google Gemini API** — text-to-concepts extraction
+
+## Getting started
+
+```bash
+git clone https://github.com/Mehraan13/mapify.git
+cd mapify
+npm install
+```
+
+Create a `.env.local` file in the project root with your own free Gemini API
+key (get one at [aistudio.google.com](https://aistudio.google.com)):
+VITE_GEMINI_API_KEY=your_key_here
+
+Then run it:
+
+```bash
+npm run dev
+```
+
+## Roadmap
+
+Being built incrementally, one feature at a time:
+
+- [ ] Reset / back-to-input button
+- [ ] Click a node to see a short explanation of that concept
+- [ ] Click a node to expand it into a deeper sub-map
+- [ ] Relationship labels on the connecting edges
+- [ ] Export the map as an image
+- [ ] Editable node labels
+- [ ] Local history of past maps
+
+## License
+
+Not licensed yet — add an MIT license if you'd like to make reuse terms explicit later.
