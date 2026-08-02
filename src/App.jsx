@@ -34,11 +34,11 @@ const nodeStyleCenter = {
 }
 
 const initialNodes = [
-  { id: '1', position: { x: 340, y: 220 }, data: { label: 'Artificial Intelligence' }, style: nodeStyleCenter },
-  { id: '2', position: { x: 80, y: 60 }, data: { label: 'Machine Learning' }, style: nodeStyleLight },
-  { id: '3', position: { x: 600, y: 60 }, data: { label: 'Neural Networks' }, style: nodeStyleLight },
-  { id: '4', position: { x: 80, y: 380 }, data: { label: 'Ethics & Bias' }, style: nodeStyleLight },
-  { id: '5', position: { x: 600, y: 380 }, data: { label: 'Robotics' }, style: nodeStyleLight },
+  { id: '1', position: { x: 340, y: 220 }, data: { label: 'Artificial Intelligence', explanation: 'The broad field of building machines that can perform tasks normally requiring human intelligence.' }, style: nodeStyleCenter , className: 'transition-transform duration-200 hover:scale-105 cursor-pointer'},
+  { id: '2', position: { x: 80, y: 60 }, data: { label: 'Machine Learning', explanation: 'A subset of AI where systems learn patterns from data instead of following explicit rules.' }, style: nodeStyleLight, className: 'transition-transform duration-200 hover:scale-105 cursor-pointer'},
+  { id: '3', position: { x: 600, y: 60 }, data: { label: 'Neural Networks', explanation: 'A machine learning approach loosely modeled on how neurons connect in the brain.' }, style: nodeStyleLight , className: 'transition-transform duration-200 hover:scale-105 cursor-pointer'},
+  { id: '4', position: { x: 80, y: 380 }, data: { label: 'Ethics & Bias', explanation: 'The study of fairness, harm, and unintended discrimination in AI systems.' }, style: nodeStyleLight, className: 'transition-transform duration-200 hover:scale-105 cursor-pointer '},
+  { id: '5', position: { x: 600, y: 380 }, data: { label: 'Robotics', explanation: 'The application of AI to physical machines that sense and act in the real world.' }, style: nodeStyleLight, className: 'transition-transform duration-200 hover:scale-105 cursor-pointer' },
 ]
 
 const initialEdges = [
@@ -48,9 +48,6 @@ const initialEdges = [
   { id: 'e1-5', source: '1', target: '5' },
 ]
 
-// Calls Gemini and asks it to return exactly the shape we need: one
-// central topic + a handful of related concepts. responseSchema forces
-// the model to return valid JSON matching this shape, every time.
 async function extractMindMap(text) {
   const apiKey = import.meta.env.VITE_GEMINI_API_KEY
   const res = await fetch(
@@ -61,7 +58,7 @@ async function extractMindMap(text) {
       body: JSON.stringify({
         contents: [{
           parts: [{
-            text: `Read the following text. Identify the single central topic, and 4 to 6 key related concepts. Keep each label short (2-4 words).\n\nText:\n${text}`,
+            text: `Read the following text. Identify the single central topic, and however many genuinely distinct key related concepts actually appear — this could be as few as 2 or as many as 8, do not force a fixed number, base it entirely on what's actually in the text. Keep each label short (2-4 words). For the central topic and every related concept, also write one short, plain-language sentence explaining it.\n\nText:\n${text}`,
           }],
         }],
         generationConfig: {
@@ -70,9 +67,20 @@ async function extractMindMap(text) {
             type: 'OBJECT',
             properties: {
               central: { type: 'STRING' },
-              branches: { type: 'ARRAY', items: { type: 'STRING' } },
+              centralExplanation: { type: 'STRING' },
+              branches: {
+                type: 'ARRAY',
+                items: {
+                  type: 'OBJECT',
+                  properties: {
+                    label: { type: 'STRING' },
+                    explanation: { type: 'STRING' },
+                  },
+                  required: ['label', 'explanation'],
+                },
+              },
             },
-            required: ['central', 'branches'],
+            required: ['central', 'centralExplanation', 'branches'],
           },
         },
       }),
@@ -89,17 +97,20 @@ async function extractMindMap(text) {
   return JSON.parse(jsonText)
 }
 
-
-// Turns { central, branches } into React Flow nodes/edges, placing
-// branches evenly around the center using basic trig — our radial layout.
-function buildGraph({ central, branches }) {
+function buildGraph({ central, centralExplanation, branches }) {
   const centerX = 400
   const centerY = 300
   const radius = 260
 
   const nodes = [
-    { id: 'center', position: { x: centerX, y: centerY }, data: { label: central }, style: nodeStyleCenter },
-    ...branches.map((label, i) => {
+    {
+      id: 'center',
+      position: { x: centerX, y: centerY },
+      data: { label: central, explanation: centralExplanation },
+      style: nodeStyleCenter,
+      className: 'transition-transform duration-200 hover:scale-105 cursor-pointer',
+    },
+    ...branches.map((branch, i) => {
       const angle = (i / branches.length) * 2 * Math.PI
       return {
         id: `branch-${i}`,
@@ -107,8 +118,9 @@ function buildGraph({ central, branches }) {
           x: centerX + radius * Math.cos(angle) - 60,
           y: centerY + radius * Math.sin(angle) - 20,
         },
-        data: { label },
+        data: { label: branch.label, explanation: branch.explanation },
         style: nodeStyleLight,
+        className: 'transition-transform duration-200 hover:scale-105 cursor-pointer',
       }
     }),
   ]
@@ -128,8 +140,10 @@ function App() {
   const [loading, setLoading] = useState(false)
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
+  const [selectedNode, setSelectedNode] = useState(null)
 
   const onConnect = (connection) => setEdges((eds) => addEdge(connection, eds))
+  const onNodeClick = (event, node) => setSelectedNode(node)
 
   const handleMapIt = async () => {
     if (!text.trim()) return
@@ -192,18 +206,24 @@ function App() {
             className="w-full h-screen absolute inset-0 bg-stone-50"
           >
             <button
-            onClick={() => setView('input')}
-            className="absolute top-6 left-6 z-10 font-[Inter] text-sm text-stone-500
-                      hover:text-stone-800 transition-colors duration-200"
-          >
-            ← New Map
+              onClick={() => setView('input')}
+              className="absolute top-6 left-6 z-10 font-[Inter] text-sm text-stone-500
+                         hover:text-stone-800 transition-colors duration-200"
+            >
+              ← New Map
             </button>
+
+            <p className="absolute top-6 left-1/2 -translate-x-1/2 z-10 font-[Inter] text-xs text-stone-400">
+              Click any node for details
+            </p>
             <ReactFlow
               nodes={nodes}
               edges={edges}
               onNodesChange={onNodesChange}
               onEdgesChange={onEdgesChange}
               onConnect={onConnect}
+              onNodeClick={onNodeClick}
+              onPaneClick={() => setSelectedNode(null)}
               defaultEdgeOptions={{
                 type: 'smoothstep',
                 style: { stroke: '#d6d3d1', strokeWidth: 1.5 },
@@ -212,6 +232,32 @@ function App() {
             >
               <Background color="#e7e5e4" gap={28} />
             </ReactFlow>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {selectedNode && (
+          <motion.div
+            initial={{ x: 320, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: 320, opacity: 0 }}
+            transition={{ duration: 0.3, ease: 'easeOut' }}
+            className="fixed top-0 right-0 h-screen w-80 bg-white
+                       shadow-[-8px_0_30px_rgba(0,0,0,0.06)] p-8 z-20 flex flex-col"
+          >
+            <button
+              onClick={() => setSelectedNode(null)}
+              className="self-end text-stone-400 hover:text-stone-800 text-sm mb-6"
+            >
+              ✕ Close
+            </button>
+            <h2 className="font-[Fraunces] text-2xl text-stone-800 mb-4">
+              {selectedNode.data.label}
+            </h2>
+            <p className="font-[Inter] text-stone-600 text-sm leading-relaxed">
+              {selectedNode.data.explanation}
+            </p>
           </motion.div>
         )}
       </AnimatePresence>
