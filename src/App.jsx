@@ -372,7 +372,15 @@ function MapCanvas({ seedNodes, seedEdges, seedSourceText, onGraphChange }) {
         fitView
       >
         <Background color="#e7e5e4" gap={28} />
-        <MiniMap pannable zoomable nodeColor={(n) => (n.data.isCenter ? '#292524' : n.data.manual ? '#fbbf24' : '#e7e5e4')} maskColor="rgba(250, 250, 249, 0.6)" style={{ background: '#fafaf9' }} />
+        <MiniMap
+          pannable
+          zoomable
+          nodeColor={(n) => (n.data.isCenter ? '#292524' : n.data.manual ? '#fbbf24' : '#e7e5e4')}
+          maskColor="rgba(41, 37, 36, 0.12)"
+          maskStrokeColor="#78716c"
+          maskStrokeWidth={2}
+          style={{ background: '#fafaf9' }}
+        />
         <Legend />
         <Panel position="top-right" className="flex flex-wrap gap-4 items-center max-w-xs justify-end">
           <button onClick={undo} disabled={undoStack.length === 0} title="Undo (Cmd/Ctrl+Z)" className="font-[Inter] text-sm text-stone-500 hover:text-stone-800 transition-colors duration-200 disabled:opacity-30 disabled:pointer-events-none">↺ Undo</button>
