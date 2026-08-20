@@ -17,13 +17,12 @@ Key Files (quick links)
 - [src/main.jsx](src/main.jsx)
 - [src/App.jsx](src/App.jsx)
 - [src/index.css](src/index.css)
-- [src/App.css](src/App.css)
 - [.oxlintrc.json](.oxlintrc.json)
 - [public/](public/)
 
 Project conventions & notes
 - **Framework:** React + Vite (ESM). Use `import` and modern JS.
-- **Styling:** Tailwind CSS v4 via `@tailwindcss/vite`. Additional CSS in `src/index.css` and `src/App.css`.
+- **Styling:** Tailwind CSS v4 via `@tailwindcss/vite`. Additional CSS is in `src/index.css`.
 - **Env vars:** Vite env pattern (`VITE_`) — access via `import.meta.env`.
 - **Animations & flow:** Uses `motion` and `@xyflow/react` in `src/App.jsx`.
 - **Linter:** `oxlint` configured via `.oxlintrc.json`.
@@ -31,7 +30,6 @@ Project conventions & notes
 Safety & pitfalls for agents
 - There is a local `.env.local` containing `VITE_GEMINI_API_KEY` (do not commit). Avoid editing or committing secrets — prefer a server-side proxy for API keys.
 - Some imports used in `src/App.jsx` (e.g., `@xyflow/react`, `html-to-image`) may not be listed in `package.json`. If a runtime error occurs, check and add missing dependencies instead of guessing versions.
-- `src/App.css` uses nested selectors; ensure PostCSS/nesting is available in the toolchain.
 
 Agent workflow recommendations
 - When changing code, run `npm ci && npm run dev` locally to validate behavior.

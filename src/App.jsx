@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   ReactFlow,
   useNodesState,
@@ -86,51 +86,50 @@ const initialEdges = [
   { id: 'e1-4', source: '1', target: '4' }, { id: 'e1-5', source: '1', target: '5' },
 ]
 
-async function extractMindMap(text) {
+const transientGeminiStatuses = new Set([429, 500, 502, 503, 504])
+
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
+async function requestGemini(prompt, responseSchema) {
   const apiKey = import.meta.env.VITE_GEMINI_API_KEY
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`,
-    {
+  const maxAttempts = 3
+
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: `Read the following text. Identify the single central topic, and however many genuinely distinct key related concepts actually appear — this could be as few as 2 or as many as 8, do not force a fixed number, base it entirely on what's actually in the text. Keep each label short (2-4 words). For the central topic and every related concept, also write one short, plain-language sentence explaining it.\n\nText:\n${text}` }] }],
-        generationConfig: {
-          responseMimeType: 'application/json',
-          responseSchema: {
-            type: 'OBJECT',
-            properties: {
-              central: { type: 'STRING' }, centralExplanation: { type: 'STRING' },
-              branches: { type: 'ARRAY', items: { type: 'OBJECT', properties: { label: { type: 'STRING' }, explanation: { type: 'STRING' } }, required: ['label', 'explanation'] } },
-            },
-            required: ['central', 'centralExplanation', 'branches'],
-          },
-        },
-      }),
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { responseMimeType: 'application/json', responseSchema } }),
+    })
+
+    if (res.ok) {
+      const data = await res.json()
+      return JSON.parse(data.candidates[0].content.parts[0].text)
     }
-  )
-  if (!res.ok) throw new Error(`Gemini API error (${res.status}): ${await res.text()}`)
-  const data = await res.json()
-  return JSON.parse(data.candidates[0].content.parts[0].text)
+
+    const details = await res.text()
+    if (!transientGeminiStatuses.has(res.status) || attempt === maxAttempts - 1) {
+      throw new Error(`Gemini API error (${res.status}): ${details}`)
+    }
+    await wait(1000 * 2 ** attempt)
+  }
+}
+
+async function extractMindMap(text) {
+  return requestGemini(`Read the following text. Identify the single central topic, and however many genuinely distinct key related concepts actually appear — this could be as few as 2 or as many as 8, do not force a fixed number, base it entirely on what's actually in the text. Keep each label short (2-4 words). For the central topic and every related concept, also write one short, plain-language sentence explaining it.\n\nText:\n${text}`, {
+    type: 'OBJECT',
+    properties: {
+      central: { type: 'STRING' }, centralExplanation: { type: 'STRING' },
+      branches: { type: 'ARRAY', items: { type: 'OBJECT', properties: { label: { type: 'STRING' }, explanation: { type: 'STRING' } }, required: ['label', 'explanation'] } },
+    },
+    required: ['central', 'centralExplanation', 'branches'],
+  })
 }
 
 async function expandConcept(conceptLabel, sourceText) {
-  const apiKey = import.meta.env.VITE_GEMINI_API_KEY
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`,
-    {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: `Here is a source text:\n\n${sourceText}\n\nBased ONLY on what is explicitly stated in this text — do not use outside knowledge — identify 2 to 5 sub-concepts specifically related to "${conceptLabel}" that are discussed in this text, each with a short plain-language explanation using only what the text says. If the text doesn't contain enough detail to break "${conceptLabel}" down further, return an empty array.` }] }],
-        generationConfig: {
-          responseMimeType: 'application/json',
-          responseSchema: { type: 'OBJECT', properties: { subconcepts: { type: 'ARRAY', items: { type: 'OBJECT', properties: { label: { type: 'STRING' }, explanation: { type: 'STRING' } }, required: ['label', 'explanation'] } } }, required: ['subconcepts'] },
-        },
-      }),
-    }
-  )
-  if (!res.ok) throw new Error(`Gemini API error (${res.status}): ${await res.text()}`)
-  const data = await res.json()
-  return JSON.parse(data.candidates[0].content.parts[0].text)
+  return requestGemini(`Here is a source text:\n\n${sourceText}\n\nBased ONLY on what is explicitly stated in this text — do not use outside knowledge — identify 2 to 5 sub-concepts specifically related to "${conceptLabel}" that are discussed in this text, each with a short plain-language explanation using only what the text says. If the text doesn't contain enough detail to break "${conceptLabel}" down further, return an empty array.`, {
+    type: 'OBJECT',
+    properties: { subconcepts: { type: 'ARRAY', items: { type: 'OBJECT', properties: { label: { type: 'STRING' }, explanation: { type: 'STRING' } }, required: ['label', 'explanation'] } } },
+    required: ['subconcepts'],
+  })
 }
 
 function buildGraph({ central, centralExplanation, branches }) {
@@ -215,7 +214,7 @@ function Legend() {
 // on every intermediate frame of an active drag, which is what would
 // bring back the earlier lag bug.
 function MapCanvas({ seedNodes, seedEdges, seedSourceText, onGraphChange }) {
-  const [nodes, setNodes] = useNodesState(seedNodes)[0] !== undefined ? useNodesState(seedNodes) : [[], () => {}, () => {}]
+  const [nodes, setNodes] = useNodesState(seedNodes)
   const [edges, setEdges] = useEdgesState(seedEdges)
   const [selectedNode, setSelectedNode] = useState(null)
   const [selectedEdge, setSelectedEdge] = useState(null)
@@ -248,12 +247,17 @@ function MapCanvas({ seedNodes, seedEdges, seedSourceText, onGraphChange }) {
     })
   }
 
+  const undoRef = useRef(undo)
+  const redoRef = useRef(redo)
+  undoRef.current = undo
+  redoRef.current = redo
+
   useEffect(() => {
     const handleKeyDown = (e) => {
       const isMod = e.metaKey || e.ctrlKey
       if (!isMod || e.key.toLowerCase() !== 'z') return
       e.preventDefault()
-      if (e.shiftKey) redo(); else undo()
+      if (e.shiftKey) redoRef.current(); else undoRef.current()
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
@@ -504,7 +508,7 @@ const deleteFromHistory = (id) => {
   return (
     <>
       <div className="min-h-screen bg-stone-50 flex flex-col items-center justify-center px-6">
-        <h1 className="font-[Fraunces] text-5xl text-stone-800 mb-3 tracking-tight">Mind Mapper</h1>
+        <h1 className="font-[Fraunces] text-5xl text-stone-800 mb-3 tracking-tight">Mapify</h1>
         <p className="font-[Inter] text-stone-500 mb-10 text-sm">Paste your text. Watch it become a map.</p>
         <textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="Paste a dense block of text here..."
           className="font-[Inter] w-full max-w-xl h-48 p-5 rounded-2xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.06)] border border-stone-200 text-stone-700 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-stone-300 resize-none" />
